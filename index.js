@@ -1,3 +1,5 @@
+"use strict";
+
 const args = process.argv.slice(2);
 
 const cheerio = require('cheerio');
@@ -5,6 +7,11 @@ const csv = require('csv');
 const fs = require('fs');
 const Crawler = require('simplecrawler');
 const Spinner = require('cli-spinner').Spinner;
+
+const ExtractorManager = require('./src/ExtractorManager');
+
+const config = JSON.parse(fs.readFileSync(args[0], 'utf8'));
+const extractor = new ExtractorManager(config);
 
 const spinner = new Spinner({
   text: 'Crawling... %s'
@@ -18,14 +25,14 @@ const incrementAmountResourcesCrawled = () => {
   spinner.setSpinnerTitle(`Crawling... %s => ${amountResourcesCrawled}`);
 };
 
-const writeStream = fs.createWriteStream(args[1]);
+const writeStream = fs.createWriteStream(args[2]);
 
 /**
  * Create CSV stringify stream
  * @type {stringify.Stringifier}
  */
 const stringifier = csv.stringify({
-  columns: ['url', 'status', 'title', 'description', 'contentType', 'location'],
+  columns: Object.keys(config),
   header: true,
 });
 
@@ -43,7 +50,7 @@ stringifier.on('readable', () => {
  * Create Crawler
  * @type {Crawler}
  */
-const crawler = new Crawler(args[0]);
+const crawler = new Crawler(args[1]);
 let amountResourcesCrawled = 0;
 
 crawler.maxDepth = 5;
@@ -52,15 +59,8 @@ crawler.parseHTMLComments = false;
 crawler.parseScriptTags = false;
 crawler.respectRobotsTxt = false;
 
-const handleNonHttpOkStatus = (queueItem, redirectQueueItem, response) => {
-  const record = {};
-
-  record.url = queueItem.url;
-  record.status = queueItem.stateData.code;
-
-  if (response && response.headers && response.headers['location']) {
-    record.location = response.headers['location'];
-  }
+const handleResponse = (queueItem, responseBuffer, response) => {
+  const record = extractor.getRecord(queueItem, responseBuffer, response);
 
   stringifier.write(record);
 
@@ -70,29 +70,11 @@ const handleNonHttpOkStatus = (queueItem, redirectQueueItem, response) => {
 /**
  * Extract properties from page when crawled
  */
-crawler.on('fetchcomplete', (queueItem, responseBuffer, response) => {
-  const record = {};
-
-  record.url = queueItem.url;
-  record.status = queueItem.stateData.code;
-  record.contentType = response.headers['content-type'];
-
-  if (0 === response.headers['content-type'].indexOf('text/html')) {
-    const page = cheerio.load(responseBuffer.toString('utf8'));
-
-    record.title = page('title').text();
-    record.description = page('meta[name="description"]').attr('content');
-  }
-
-  stringifier.write(record);
-
-  incrementAmountResourcesCrawled();
-});
-
-crawler.on('fetchredirect', handleNonHttpOkStatus);
-crawler.on('fetch404', handleNonHttpOkStatus);
-crawler.on('fetch410', handleNonHttpOkStatus);
-crawler.on('fetcherror', handleNonHttpOkStatus);
+crawler.on('fetchcomplete', handleResponse);
+crawler.on('fetchredirect', handleResponse);
+crawler.on('fetch404', handleResponse);
+crawler.on('fetch410', handleResponse);
+crawler.on('fetcherror', handleResponse);
 
 /**
  * When the crawler completes

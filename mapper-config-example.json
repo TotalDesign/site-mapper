@@ -1,0 +1,28 @@
+{
+  "URL": {
+    "type": "QueueItem",
+    "property": "url"
+  },
+  "HTTP Status": {
+    "type": "QueueItem",
+    "property": "stateData.code"
+  },
+  "Title": {
+    "type": "DOM",
+    "selector": "title",
+    "text": true
+  },
+  "Meta description": {
+    "type": "DOM",
+    "selector": "meta[name='description']",
+    "attribute": "content"
+  },
+  "Content-Type": {
+    "type": "HttpResponseHeader",
+    "name": "content-type"
+  },
+  "Redirect to": {
+    "type": "HttpResponseHeader",
+    "name": "location"
+  }
+}
